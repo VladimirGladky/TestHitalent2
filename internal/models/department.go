@@ -7,4 +7,7 @@ type Department struct {
 	Name      string    `json:"name" gorm:"not null"`
 	ParentID  *int      `json:"parent_id"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+
+	Employees []Employee   `json:"employees,omitempty" gorm:"foreignKey:ParentID"`
+	Children  []Department `json:"children,omitempty" gorm:"foreignKey:ParentID"`
 }
