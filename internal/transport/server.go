@@ -15,7 +15,7 @@ type OrganizationServiceInterface interface {
 	CreateEmployee(employee *models.Employee, id string) (*models.Employee, error)
 	GetDepartment(id string, depth string, includeEmployees string) (*models.Department, error)
 	PatchDepartment(id string, department *models.Department) (*models.Department, error)
-	DeleteDepartment(id string) error
+	DeleteDepartment(id string, mode string, reassignToDepartmentId string) error
 }
 
 type OrganizationServer struct {
@@ -188,9 +188,11 @@ func DeleteDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 				return
 			}
 		}()
+		mode := r.URL.Query().Get("mode")
+		reassignToDepartmentId := r.URL.Query().Get("reassign_to_department_id")
 		id := r.PathValue("id")
 		defer r.Body.Close()
-		err := s.service.DeleteDepartment(id)
+		err := s.service.DeleteDepartment(id, mode, reassignToDepartmentId)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`{"error": "Internal server error 2", "description": "` + err.Error() + `"}`))
