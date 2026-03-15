@@ -3,9 +3,11 @@ package transport
 import (
 	"TestHitalent2/internal/config"
 	"TestHitalent2/internal/models"
+	"TestHitalent2/internal/suberrors"
 	"TestHitalent2/pkg/logger"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -14,7 +16,7 @@ type OrganizationServiceInterface interface {
 	CreateDepartment(department *models.Department) (*models.Department, error)
 	CreateEmployee(employee *models.Employee, id string) (*models.Employee, error)
 	GetDepartment(id string, depth string, includeEmployees string) (*models.Department, error)
-	PatchDepartment(id string, department *models.Department) (*models.Department, error)
+	PatchDepartment(id string, department *models.UpdateDepartmentRequest) (*models.Department, error)
 	DeleteDepartment(id string, mode string, reassignToDepartmentId string) error
 }
 
@@ -62,9 +64,25 @@ func CreateDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		}
 		department, err := s.service.CreateDepartment(req)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error": "Internal server error 2", "description": "` + err.Error() + `"}`))
-			return
+			switch {
+			case errors.Is(err, suberrors.ErrNilDepartment),
+				errors.Is(err, suberrors.ErrInvalidDepartmentName):
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrParentNotFound):
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrDepartmentNameExistsInParent):
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error": "internal server error"}`))
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -98,9 +116,21 @@ func CreateEmployeesHandler(s *OrganizationServer) http.HandlerFunc {
 		}
 		employee, err := s.service.CreateEmployee(req, id)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error": "Internal server error 2", "description": "` + err.Error() + `"}`))
-			return
+			switch {
+			case errors.Is(err, suberrors.ErrNilEmployee),
+				errors.Is(err, suberrors.ErrInvalidID):
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrDepartmentNotFound):
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error": "internal server error"}`))
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -130,9 +160,20 @@ func GetDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		defer r.Body.Close()
 		department, err := s.service.GetDepartment(id, depth, includeEmployees)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error": "Internal server error 2", "description": "` + err.Error() + `"}`))
-			return
+			switch {
+			case errors.Is(err, suberrors.ErrInvalidID):
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrDepartmentNotFound):
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error": "internal server error"}`))
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -156,7 +197,7 @@ func PatchDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		}()
 		id := r.PathValue("id")
 		defer r.Body.Close()
-		req := new(models.Department)
+		req := new(models.UpdateDepartmentRequest)
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"error": "Invalid request body", "description": "` + err.Error() + `"}`))
@@ -164,9 +205,29 @@ func PatchDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		}
 		department, err := s.service.PatchDepartment(id, req)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error": "Internal server error 2", "description": "` + err.Error() + `"}`))
-			return
+			switch {
+			case errors.Is(err, suberrors.ErrInvalidID),
+				errors.Is(err, suberrors.ErrNilDepartmentUpdate),
+				errors.Is(err, suberrors.ErrInvalidDepartmentName):
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrDepartmentNotFound),
+				errors.Is(err, suberrors.ErrParentNotFound):
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrDepartmentOwnParent),
+				errors.Is(err, suberrors.ErrDepartmentSubtree),
+				errors.Is(err, suberrors.ErrDepartmentNameExistsInParent):
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error": "internal server error"}`))
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -194,9 +255,28 @@ func DeleteDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		defer r.Body.Close()
 		err := s.service.DeleteDepartment(id, mode, reassignToDepartmentId)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error": "Internal server error 2", "description": "` + err.Error() + `"}`))
-			return
+			switch {
+			case errors.Is(err, suberrors.ErrInvalidID),
+				errors.Is(err, suberrors.ErrEmptyMode),
+				errors.Is(err, suberrors.ErrInvalidMode),
+				errors.Is(err, suberrors.ErrReassignDepartmentInvalidId):
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrDepartmentNotFound),
+				errors.Is(err, suberrors.ErrReassignDepartmentNotFound):
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			case errors.Is(err, suberrors.ErrReassignToChild):
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+				return
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error": "internal server error"}`))
+				return
+			}
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
