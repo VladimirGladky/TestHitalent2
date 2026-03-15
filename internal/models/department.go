@@ -11,3 +11,8 @@ type Department struct {
 	Employees []Employee    `json:"employees,omitempty" gorm:"foreignKey:DepartmentID"`
 	Children  []*Department `json:"children,omitempty" gorm:"foreignKey:ParentID"`
 }
+
+type UpdateDepartmentRequest struct {
+	Name     *string `json:"name"`
+	ParentID *int    `json:"parent_id"`
+}
