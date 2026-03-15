@@ -36,11 +36,15 @@ func NewOrganizationServer(cfg *config.Config, service OrganizationServiceInterf
 
 func (s *OrganizationServer) Run() error {
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("POST /api/v1/departments", CreateDepartmentsHandler(s))
 	mux.HandleFunc("POST /api/v1/departments/{id}/employees", CreateEmployeesHandler(s))
 	mux.HandleFunc("GET /api/v1/departments/{id}", GetDepartmentsHandler(s))
 	mux.HandleFunc("PATCH /api/v1/departments/{id}", PatchDepartmentsHandler(s))
 	mux.HandleFunc("DELETE /api/v1/departments/{id}", DeleteDepartmentsHandler(s))
+
+	mux.HandleFunc("GET /", ServeUI())
+
 	logger.GetLoggerFromCtx(s.ctx).Info("HTTP server is running")
 	addr := s.cfg.Host + ":" + s.cfg.Port
 	return http.ListenAndServe(addr, mux)
@@ -279,5 +283,12 @@ func DeleteDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 			}
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// ServeUI serves the web UI for testing the API
+func ServeUI() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./web/templates/index.html")
 	}
 }
