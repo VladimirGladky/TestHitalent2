@@ -47,7 +47,10 @@ func (s *OrganizationServer) Run() error {
 
 	logger.GetLoggerFromCtx(s.ctx).Info("HTTP server is running")
 	addr := s.cfg.Host + ":" + s.cfg.Port
-	return http.ListenAndServe(addr, mux)
+
+	handler := corsMiddleware(mux)
+
+	return http.ListenAndServe(addr, handler)
 }
 
 func CreateDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
@@ -92,7 +95,7 @@ func CreateDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 
-		err = json.NewEncoder(w).Encode(models.Department{ID: department.ID, Name: department.Name, CreatedAt: department.CreatedAt})
+		err = json.NewEncoder(w).Encode(department)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`{"error": "Internal server error 3", "description": "` + err.Error() + `"}`))
@@ -122,7 +125,9 @@ func CreateEmployeesHandler(s *OrganizationServer) http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, suberrors.ErrNilEmployee),
-				errors.Is(err, suberrors.ErrInvalidID):
+				errors.Is(err, suberrors.ErrInvalidID),
+				errors.Is(err, suberrors.ErrInvalidEmployeeFullName),
+				errors.Is(err, suberrors.ErrInvalidEmployeePosition):
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
 				return
@@ -140,7 +145,7 @@ func CreateEmployeesHandler(s *OrganizationServer) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 
-		err = json.NewEncoder(w).Encode(models.Employee{ID: employee.ID, FullName: employee.FullName, CreatedAt: employee.CreatedAt})
+		err = json.NewEncoder(w).Encode(employee)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`{"error": "Internal server error 3", "description": "` + err.Error() + `"}`))
@@ -165,7 +170,9 @@ func GetDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 		department, err := s.service.GetDepartment(id, depth, includeEmployees)
 		if err != nil {
 			switch {
-			case errors.Is(err, suberrors.ErrInvalidID):
+			case errors.Is(err, suberrors.ErrInvalidID),
+				errors.Is(err, suberrors.ErrInvalidDepth),
+				errors.Is(err, suberrors.ErrInvalidIncludeEmployees):
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
 				return
@@ -272,7 +279,8 @@ func DeleteDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
 				return
-			case errors.Is(err, suberrors.ErrReassignToChild):
+			case errors.Is(err, suberrors.ErrReassignToChild),
+				errors.Is(err, suberrors.ErrReassignToSelf):
 				w.WriteHeader(http.StatusConflict)
 				_, _ = w.Write([]byte(`{"error": "` + err.Error() + `"}`))
 				return
@@ -286,9 +294,23 @@ func DeleteDepartmentsHandler(s *OrganizationServer) http.HandlerFunc {
 	}
 }
 
-// ServeUI serves the web UI for testing the API
 func ServeUI() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./web/templates/index.html")
 	}
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

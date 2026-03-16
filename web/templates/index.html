@@ -20,6 +20,11 @@
         button.delete { background: #dc2626; }
         button.delete:hover { background: #b91c1c; }
         .response { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .response-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .status-badge { padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 14px; }
+        .status-2xx { background: #d1fae5; color: #065f46; }
+        .status-4xx { background: #fef3c7; color: #92400e; }
+        .status-5xx { background: #fee2e2; color: #991b1b; }
         pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px; }
         .success { border-left: 4px solid #10b981; }
         .error { border-left: 4px solid #ef4444; }
@@ -142,19 +147,42 @@
 
         <!-- Response Area -->
         <div class="response" id="response">
-            <h2>📄 Response</h2>
+            <div class="response-header">
+                <h2>📄 Response</h2>
+                <span id="statusBadge" class="status-badge" style="display: none;"></span>
+            </div>
             <pre id="responseContent">Waiting for request...</pre>
         </div>
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:5438/api/v1';
+        const API_BASE = 'http://localhost:4053/api/v1';
 
-        function showResponse(data, isError = false) {
+        function showResponse(data, isError = false, statusCode = null) {
             const responseDiv = document.getElementById('response');
             const responseContent = document.getElementById('responseContent');
+            const statusBadge = document.getElementById('statusBadge');
+
             responseDiv.className = 'response ' + (isError ? 'error' : 'success');
             responseContent.textContent = JSON.stringify(data, null, 2);
+
+            // Show status code badge
+            if (statusCode) {
+                statusBadge.style.display = 'inline-block';
+                statusBadge.textContent = `HTTP ${statusCode}`;
+
+                // Set badge color based on status code
+                statusBadge.className = 'status-badge';
+                if (statusCode >= 200 && statusCode < 300) {
+                    statusBadge.classList.add('status-2xx');
+                } else if (statusCode >= 400 && statusCode < 500) {
+                    statusBadge.classList.add('status-4xx');
+                } else if (statusCode >= 500) {
+                    statusBadge.classList.add('status-5xx');
+                }
+            } else {
+                statusBadge.style.display = 'none';
+            }
         }
 
         // Create Department
@@ -171,7 +199,7 @@
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                showResponse(data, !res.ok);
+                showResponse(data, !res.ok, res.status);
             } catch (err) {
                 showResponse({ error: err.message }, true);
             }
@@ -186,7 +214,11 @@
                 position: document.getElementById('empPosition').value
             };
             const hiredAt = document.getElementById('empHiredAt').value;
-            if (hiredAt) body.hired_at = hiredAt;
+
+            // Convert date to RFC3339 format (YYYY-MM-DDTHH:MM:SSZ) if provided
+            if (hiredAt) {
+                body.hired_at = hiredAt + 'T00:00:00Z';
+            }
 
             try {
                 const res = await fetch(`${API_BASE}/departments/${deptId}/employees`, {
@@ -195,7 +227,7 @@
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                showResponse(data, !res.ok);
+                showResponse(data, !res.ok, res.status);
             } catch (err) {
                 showResponse({ error: err.message }, true);
             }
@@ -211,7 +243,7 @@
             try {
                 const res = await fetch(`${API_BASE}/departments/${id}?depth=${depth}&include_employees=${includeEmp}`);
                 const data = await res.json();
-                showResponse(data, !res.ok);
+                showResponse(data, !res.ok, res.status);
             } catch (err) {
                 showResponse({ error: err.message }, true);
             }
@@ -235,7 +267,7 @@
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                showResponse(data, !res.ok);
+                showResponse(data, !res.ok, res.status);
             } catch (err) {
                 showResponse({ error: err.message }, true);
             }
@@ -256,10 +288,10 @@
             try {
                 const res = await fetch(url, { method: 'DELETE' });
                 if (res.status === 204) {
-                    showResponse({ success: 'Department deleted successfully' });
+                    showResponse({ success: 'Department deleted successfully' }, false, 204);
                 } else {
                     const data = await res.json();
-                    showResponse(data, !res.ok);
+                    showResponse(data, !res.ok, res.status);
                 }
             } catch (err) {
                 showResponse({ error: err.message }, true);

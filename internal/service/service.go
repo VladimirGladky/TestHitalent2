@@ -43,10 +43,6 @@ func (s *OrganizationService) CreateDepartment(department *models.Department) (*
 	if department == nil {
 		return nil, suberrors.ErrNilDepartment
 	}
-	err := s.validate.Struct(department)
-	if err != nil {
-		return nil, err
-	}
 
 	department.Name = strings.TrimSpace(department.Name)
 	if len(department.Name) < 1 || len(department.Name) > 200 {
@@ -90,6 +86,13 @@ func (s *OrganizationService) CreateEmployee(employee *models.Employee, id strin
 	employee.FullName = strings.TrimSpace(employee.FullName)
 	employee.Position = strings.TrimSpace(employee.Position)
 
+	if len(employee.FullName) < 1 || len(employee.FullName) > 200 {
+		return nil, suberrors.ErrInvalidEmployeeFullName
+	}
+	if len(employee.Position) < 1 || len(employee.Position) > 200 {
+		return nil, suberrors.ErrInvalidEmployeePosition
+	}
+
 	exists, err := s.repo.DepartmentExists(employee.DepartmentID)
 	if err != nil {
 		return nil, err
@@ -97,10 +100,7 @@ func (s *OrganizationService) CreateEmployee(employee *models.Employee, id strin
 	if !exists {
 		return nil, suberrors.ErrDepartmentNotFound
 	}
-	err = s.validate.Struct(employee)
-	if err != nil {
-		return nil, err
-	}
+
 	return s.repo.CreateEmployee(employee)
 }
 
@@ -113,7 +113,7 @@ func (s *OrganizationService) GetDepartment(id string, depth string, includeEmpl
 	if depth != "" {
 		intDepth, err = strconv.Atoi(depth)
 		if err != nil {
-			return nil, err
+			return nil, suberrors.ErrInvalidDepth
 		}
 		if intDepth > 5 {
 			intDepth = 5
@@ -126,7 +126,7 @@ func (s *OrganizationService) GetDepartment(id string, depth string, includeEmpl
 	if includeEmployees != "" {
 		boolIncludeEmployees, err = strconv.ParseBool(strings.TrimSpace(includeEmployees))
 		if err != nil {
-			return nil, err
+			return nil, suberrors.ErrInvalidIncludeEmployees
 		}
 	}
 	department, err := s.repo.GetDepartment(intID, boolIncludeEmployees)
@@ -260,6 +260,9 @@ func (s *OrganizationService) DeleteDepartment(id string, mode string, reassignT
 		intReassignToDepartmentId, err = strconv.Atoi(reassignToDepartmentId)
 		if err != nil {
 			return suberrors.ErrReassignDepartmentInvalidId
+		}
+		if intReassignToDepartmentId == intID {
+			return suberrors.ErrReassignToSelf
 		}
 		return s.repo.DeleteDepartmentReassign(intID, intReassignToDepartmentId)
 	}
