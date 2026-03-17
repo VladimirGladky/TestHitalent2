@@ -12,6 +12,8 @@ import (
 	"gorm.io/gorm"
 )
 
+//go:generate mockgen -source=service.go -destination=../repository/mocks/mock_repository.go -package=mocks OrganizationRepositoryInterface
+
 type OrganizationRepositoryInterface interface {
 	CreateDepartment(department *models.Department) (*models.Department, error)
 	CreateEmployee(employee *models.Employee) (*models.Employee, error)

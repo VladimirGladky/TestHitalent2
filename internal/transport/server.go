@@ -12,6 +12,8 @@ import (
 	"net/http"
 )
 
+//go:generate mockgen -source=server.go -destination=../service/mocks/mock_service.go -package=mocks OrganizationServiceInterface
+
 type OrganizationServiceInterface interface {
 	CreateDepartment(department *models.Department) (*models.Department, error)
 	CreateEmployee(employee *models.Employee, id string) (*models.Employee, error)
